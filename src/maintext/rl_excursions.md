@@ -1,44 +1,32 @@
-![We analyze the effect of RL across intermediate pretraining checkpoints](/assets/figures/figure_1.gif "Figure 1. We analyze the effect of RL across intermediate pretraining checkpoints $\mathcal{M}_t$ and across two settings: RL directly on the base model (**RL Only**; $\mathcal{M}_t^{\text{RL}}$), and RL after SFT (**Standard Pipeline**; $\mathcal{M}_t^{\text{SFT}\rightarrow\text{RL}}$). We observe: (1) On-policy learning is effective starting very early during standard pretraining. $\mathcal{M}_t^{\text{RL}}$ models show significant improvement in both $\texttt{pass@1}$ and $\texttt{pass@k}$ metrics as soon as $2\text{K}$ steps ($\sim 4\text{B}$ tokens) of pretraining. (2) In line with prior work, $\mathcal{M}_t^{\text{SFT}\rightarrow\text{RL}}$ improves pass@1 performance over $\mathcal{M}_t^{\text{SFT}}$, but harms $\texttt{pass@32}$ suggesting sharpening. (3) In contrast, $\mathcal{M}_t^{\text{RL}}$ consistently leads to an increase in $\texttt{pass@32}$ performance suggesting that RL can actually expand the model distribution to learn new capabilities.")
+![We analyze the effect of RL across intermediate pretraining checkpoints](/assets/figures/figure_1.png "Figure 1. Overview of our main findings. We compare several post-training recipes applied to intermediate pre-training checkpoints: direct RL, SFT (one solution per question), SFT-Gold (multiple solutions), the standard SFT→RL pipeline, and parallel averaging of RL and SFT gradients. (1) RL is effective early in pretraining, improving both pass@1 and pass@32 from as few as 4B tokens. (2) RL outperforms SFT when multiple ground-truth demonstrations are unavailable. (3) SFT degrades general capabilities, while RL leaves them unchanged. (4) Parallel averaging of RL and SFT gradients achieves the best pass@32 across all checkpoints.")
 
+As of 2026, Large Language Model (LLM) training follows a standard pipeline: **pretraining** → **supervised fine-tuning** (**SFT**) → **reinforcement learning** (**RL**) via verifiable rewards. These stages use fundamentally different objectives: pretraining and SFT employ a Next-Token Prediction (NTP) objective on a static external dataset ("off-policy"), whereas RL employs a policy optimization objective on the model's own generations ("on-policy").
 
-<!-- ## TL;DR
+Under this standard regime, RL only ever appears after a substantial amount of NTP training. Is that fundamentally necessary, or just a design choice? And while it's widely observed that post-training dramatically improves reasoning, RL's actual influence on model capabilities has been the subject of heated recent debate. In this work, we attempt to answer three fundamental questions:
 
-Modern LLM training usually looks like this:
+> **1. When does RL work?** At what point during training does the model's self-generated data become good enough for on-policy learning to yield meaningful signal?
 
-> **Pretraining** → **Supervised fine-tuning (SFT)** → **Reinforcement Learning (RL) via verfiable rewards**
+> **2. What does RL do?** Does it teach the model genuinely new capabilities, or does it merely sharpen what the model already knows? And does it preserve or degrade skills inherited from pretraining?
 
-where, pretraining and SFT employ a next-token prediction (NTP) objective on a static external dataset ("off-policy"). While, RL employs a policy optimization objective on the LLM generations ("on-policy").
+> **3. How should RL be used?** Can we do better than the standard sequential pipeline of SFT *then* RL?
 
-The use of two distinct training objectives raises a basic but underexplored question
-> **At what point during training does an LLM become capable of learning from its own generations (i.e., on-policy)?**
- -->
+To answer these questions, we pretrain an LLM from scratch on a high-quality, reasoning-heavy corpus, save intermediate checkpoints, and apply RL, SFT, and SFT→RL to each checkpoint head-to-head. We use math reasoning as our testbed since it provides a clean setting with unambiguous and verifiable rewards. Here's what we found:
 
-<!-- ## Rethinking the Training Pipeline -->
+**When does RL work?** (Results 1 & 2)
+- **RL is effective surprisingly early in pretraining.** Models start learning from their own generations well before Chinchilla-optimal token counts. On GSM8K, direct RL matches or outperforms the full SFT→RL pipeline.
+- **RL outperforms SFT when ground-truth demonstrations are scarce.** With only one solution per problem (a realistic setting), RL substantially outperforms SFT on pass@1. SFT only regains the edge when it has access to many high-quality solutions per problem, which is rarely practical.
 
-As of February 2026, Large Language Model (LLM) training follows a standard pipeline: **pretraining** $\rightarrow$ **supervised fine-tuning** (**SFT**) $\rightarrow$ **reinforcement learning** (**RL**) via verifiable rewards[^ouyang2022]. These stages contrast in their objectives: Pretraining and SFT employ a Next-Token Prediction (NTP) objective on a static external dataset ("off-policy"). Whereas RL employs a policy optimization objective on the model's own generations ("on-policy").
+**What does RL do?** (Results 3 & 4)
+- **RL can expand the output distribution.** Contrary to recent claims that RL only sharpens, we find that direct RL improves both pass@1 and pass@k. The sharpening effect only arises when RL follows SFT—it's an artifact of the pipeline, not the objective.
+- **RL preserves general capabilities; SFT doesn't.** SFT consistently degrades non-math benchmarks by 4–8 percentage points, while RL leaves them essentially unchanged.
 
+**How should RL be used?** (Result 5)
+- **Parallel averaging of RL and SFT gradients combines their strengths.** A simple algorithm that averages RL and SFT updates at each step achieves the best pass@32 across all checkpoints while preserving general capabilities.
 
-
-The use of two distinct training objectives raises several interesting but underexplored questions. In this work we systematically investigate this transition between off-policy and on-policy training objectives, asking: 
-
-> **How and when should an RL objective be used in LLM training?**
-
-Furthermore, there has been a recent growing interest in applying RL earlier in training[^arxiv-org-2510-01265] [^arxiv-org-2509-19249] [^arxiv-org-2512-03442]. As a precursor, we ask concretely: *at what point during pretraining does the model's self-generated data become good enough that on-policy learning actually yields meaningful gradient signals?*
-
-To answer these questions, we perform a rigorous case study of on-policy learning with a focus on LLM reasoning capabilities.
-We pretrain an LLM from scratch on a high-quality, reasoning heavy corpus, and sample several intermediate pretraining checkpoints. We perform RL on the base pretraining checkpoints and study these models in comparison with (i) SFT on the base checkpoints, and (ii) the standard SFT $\rightarrow$ RL pipeline.
-For all our experiments, we use math reasoning as a testbed since it provides a clean setting with unambiguous and verifiable rewards.
-<!-- , and outcome-based RL methods like GRPO are known to work well (at least in post-training). But we're hoping the lessons we learn here generalize to other RL-training scenarios.  -->
-In a nutshell, we derive the following insights:
-- **Models start to learn from their own generations very early in training**. That is, RL is effective surprisingly early in pretraining. Training with RL significantly improves performance across datasets and metrics prior to pretraining on a large number of tokens.
-- **RL can lead to expansion of the output distribution.** Contrary to recent findings that RL only sharpens the output distribution, we find that early stage RL considerably improves pass@k performance, indicating that "expansion". We find that the sharpening vs. expansion effect with RL depends on the training pipelines.
-- **Effect of number of rollouts at different stages of model training.** Early pretraining checkpoints might yield sparse or noisy reward. We observe that a larger number of rollouts provides diminishing returns with compute and fewer rollouts could in fact be
-more FLOP-efficient.
-
-Together, our findings demonstrate the feasibility of
-applying RL objectives to what would typically be considered “under-trained” models suggesting that early-stage RL objectives may be effective in improving downstream performance.
+Together, these findings suggest that many assumptions about RL in LLM training are artifacts of the current pipeline, not fundamental properties of the objective—and that LLM training might benefit from an expanded use of RL.
 
 ---
+
 ## Experimental Setup
 
 ### Pretraining checkpoints
@@ -49,7 +37,7 @@ We pretrain a **1B-parameter** decoder-only model (OLMo2 architecture[^arxiv-org
 <summary>Pretraining details</summary>
 
 - **Architecture:** OLMo2 1B
-- **Tokens:** 50B total (≈ 2.5× Chinchilla-optimal[^arxiv-org-2203-15556] token count for this model size)
+- **Tokens:** 50B total (≈ 2.5× Chinchilla-optimal token count for this model size)
 - **Optimizer:** AdamW with cosine LR decay, peak LR 4e-4
 - **Seq length:** 4096
 - **Batch size:** 512
@@ -57,240 +45,169 @@ We pretrain a **1B-parameter** decoder-only model (OLMo2 architecture[^arxiv-org
 
 </details>
 
-### Three training pipelines
+### Training pipelines
 
-Let **M<sub>t</sub>** be the base checkpoint after *t* pretraining steps/tokens. We compare three distinct training pipelines:
+Let **M<sub>t</sub>** be the base checkpoint after *t* pretraining tokens. We compare:
 
-1. **RL only:** M<sub>t</sub> → M<sub>t</sub><sup>RL</sup>
-   We run RL (GRPO) directly on the base checkpoint.
+1. **Direct RL:** M<sub>t</sub> → M<sub>t</sub><sup>RL</sup>
+   Run RL (GRPO) directly on the base checkpoint. No ground-truth reasoning traces—just the model's own generations and a binary reward.
 
-2. **SFT only:** M<sub>t</sub> → M<sub>t</sub><sup>SFT</sup>
-   We train on ground-truth solutions (teacher-written reasoning traces) using the NTP objective. We use the *same questions* as in RL, but here the model learns from expert demonstrations.
+2. **SFT:** M<sub>t</sub> → M<sub>t</sub><sup>SFT</sup>
+   Train on **one** randomly chosen ground-truth solution per question using the NTP objective. This is the realistic SFT setting.
 
-3. **Standard pipeline:** M<sub>t</sub> → M<sub>t</sub><sup>SFT</sup> → M<sub>t</sub><sup>SFT→RL</sup>
-   Taking SFT from above, we then apply RL. This is the typical modern recipe and our gold-standard baseline.
+3. **SFT-Gold:** M<sub>t</sub> → M<sub>t</sub><sup>SFT-Gold</sup>
+   Train on **all** ground-truth solutions per question (~23 per problem on average). An idealized setting that's impractical in most domains.
+
+4. **Standard pipeline:** M<sub>t</sub> → M<sub>t</sub><sup>SFT</sup> → M<sub>t</sub><sup>SFT→RL</sup>
+   SFT followed by RL. This is the typical modern recipe and our gold-standard baseline.
+
+5. **Parallel averaging:** M<sub>t</sub> → M<sub>t</sub><sup>Parallel</sup>
+   Average RL and SFT gradient updates at each training step (more on this in Result 5).
 
 ### Data and evaluation
 
-**Training data:** For both RL and SFT, we use [OpenMathInstruct](https://huggingface.co/datasets/nvidia/OpenMathInstruct-1)[^toshniwal2024]—a dataset of math questions with multiple ground-truth solutions per question.
+**Training data:** [OpenMathInstruct](https://huggingface.co/datasets/nvidia/OpenMathInstruct-1)—math questions with multiple ground-truth solutions per question.
 
-**Benchmarks:** We evaluate on GSM8K[^arxiv-org-2110-14168] (grade-school math) and MATH[^hendrycks2021] (competition-level problems).
+**Benchmarks:** GSM8K (grade-school math) and MATH (competition-level problems).
 
-**Metrics:** We report pass@k for k ∈ {1, 8, 32} at temperature T = 0.6.
+**Metrics:** pass@k for k ∈ {1, 8, 32} at temperature T = 0.6.
 
-> **What is pass@k?** pass@1 measures how often the model gets the right answer on its first try. pass@k (for k > 1) measures whether *any* of k sampled solutions is correct, telling us about the upperbound on model's reasoning capabilities.
-
-
-<details>
-<summary>Details on OpenMathInstruct</summary>
-
-OpenMathInstruct consists of math questions with multiple ground-truth solutions per question. In **SFT**, we train on the provided solutions from the dataset. In **RL**, the model generates its own solutions and receives reward based on whether the final answer is correct.
-
-The dataset contains two main categories:
-- **Majority:** Questions inspired by the MATH dataset—challenging competition-level problems
-- **Minority:** Questions inspired by GSM8K—grade-school level math problems
-
-</details>
+> **What is pass@k?** pass@1 measures how often the model gets the right answer on its first try. pass@k (for k > 1) measures whether *any* of k sampled solutions is correct—it tells us about the upper bound on the model's reasoning capabilities.
 
 <details>
 <summary>Note on evaluating base checkpoints</summary>
 
-Pretraining checkpoints don't reliably follow instruction formatting, so we need to evaluate them differently. We care about the model's *reasoning ability*, not its instruction-following ability.
-
-- **Base checkpoints (M<sub>t</sub>):** Evaluated with **8-shot** prompting (few-shot examples teach the format)
-- **All trained models (SFT/RL):** Evaluated **0-shot** (they learn the format during training)
+Pretraining checkpoints don't reliably follow instruction formatting, so we evaluate them with **8-shot** prompting (few-shot examples teach the format). All post-trained models (SFT/RL) are evaluated **0-shot**.
 
 </details>
+
+---
 
 ## Result 1: RL works surprisingly early.
 
-Let's look at what happens when we run RL directly on early pretraining checkpoints.
+![GSM8K results across checkpoints](/assets/figures/gsm_passatk_comparison.png "Figure 2. GSM8K pass@k across checkpoints. RL-only improves early and matches SFT→RL after enough pretraining. SFT baselines use one ground-truth solution per problem.")
 
-### Direct-RL competes with the gold standard pipeline on GSM8K.
+As early as **4B pretraining tokens**, running RL directly on the base checkpoint gives meaningful improvements. For example, pass@1 accuracy jumps from ~2% (base checkpoint) to ~18% after RL. This is *before* we've even hit the Chinchilla-optimal token count (20B) for this model size—RL is helping even when the model is still "under-trained" by conventional standards.
 
-![GSM8K results across checkpoints](/assets/figures/gsm_passatk_comparison.png "Figure 2. GSM8K results across checkpoints. RL-only improves early and can match SFT→RL after enough pretraining.")
+**More importantly, RL-only competes with the standard pipeline.** By 10B+ tokens, the RL-only model outperforms SFT on pass@1 and performs on par with the full SFT→RL pipeline. This is quite remarkable because the RL-only model never sees ground-truth reasoning traces. It develops reasoning capabilities entirely from self-generated solutions and reward feedback, suggesting that expert-written solution traces may not be strictly necessary to unlock certain reasoning behaviors.
 
-We are seeing very promising results on GSM8K. As early as **4B pretraining tokens**, running RL gives us meaningful improvements. For example, pass@1 accuracy jumps from ~2% (base checkpoin, M<sub>t</sub>) to ~18% (after RL, M<sub>t</sub><sup>RL</sup>).  What makes this especially interesting is that 4B tokens is *before* we've even hit the Chinchilla-optimal[^arxiv-org-2203-15556] token count (i.e., 20B) for this model size. In other words, RL is helping even when the model is still pretty "under-trained" by conventional standards.
+On the harder MATH benchmark, direct RL still consistently improves over the base checkpoint (5–10% gains in pass@k), but doesn't fully catch up to SFT→RL. Competition-level problems seem to need more than what early on-policy learning alone can provide. We found that **targeted pretraining data composition** (adding more math-specific tokens) is a much stronger lever for improving RL effectiveness than scaling model size—a 1B model pretrained on 60B math-heavy tokens outperforms a 4B model pretrained on the original 50B mix.
 
-**More importantly, RL-only competes with the standard pipeline.** By the time we've pretrained on 10B+ tokens, the RL-only model actually *outperforms* the SFT-only model on pass@1, and performs on par with the full SFT→RL pipeline (M<sub>t</sub><sup>SFT→RL</sup>, the gold-standard baseline).
+<details>
+<summary><strong>A caveat: seed brittleness on early checkpoints</strong></summary>
 
-We are quite surprised by this results because the RL-only model M<sub>t</sub><sup>RL</sup> never trains on ground-truth reasoning traces. It only sees its own generated solutions, and a reward signal for whether the final answer is correct. Yet it matches or outperforms the performance of models that explicitly train on expert-written solutions. This suggests that **ground-truth solution traces may not be strictly necessary** to unlock certain reasoning behaviors. A pretraining model can happily bootstrap its way there from self-generated attempts.
+Between 4B and 10B pretraining tokens, RL performance can be sensitive to random seed. Some seeds give significant improvements; others barely improve at all. Interestingly, both good and bad seeds achieve similar *training* rewards—suggesting the model sometimes "games" the reward signal in ways that don't transfer to test-time problem-solving. This brittleness resolves by ~10B tokens.
 
-We also see significant improvements in pass@k for k=8 and k=32, which we'll dig into more in the next section (Result 2).
+</details>
 
-### Limitations on MATH. 
-
-![MATH results across checkpoints](/assets/figures/math_passatk_comparison.png "Figure 3. MATH results. RL-only improves over the base checkpoint but doesn't catch up to SFT or SFT→RL on this harder distribution.")
-
-The story on MATH is more nuanced. We still consistently see 5-10% improvements in pass@1, pass@8, and pass@32 over the base checkpoints. 
-But on MATH, RL-only (M<sub>t</sub><sup>RL</sup>) never quite catches up to SFT or the standard SFT→RL pipeline (M<sub>t</sub><sup>SFT→RL</sup>). The gap persists even as we continue pretraining. MATH problems are significantly harder than GSM8K (competition-level vs. grade-school), and it seems like training purely on on-policy data from early checkpoints has its limits. The model's self-generated solutions might not be diverse or correct enough to bootstrap strong reasoning on really challenging problems.
-
-Is this a fundamental limitation of the approach, or could we fix it with more data or a larger model? We are currently investigating this!
-
-**Result 1 takeaway:** RL from early checkpoints is effective, but task difficulty matters. For easy problems, it can match the standard pipeline. For harder problems, there's still a gap.
-
-
+**Takeaway:** RL from early checkpoints is effective, but task difficulty matters. For easier problems, it can match the standard pipeline. For harder problems, pretraining data composition is the key lever.
 
 ---
-## Result 2: Can we settle the long-time RL debate, sharpening or expansion?
 
-One of the heated debates in recent work is what RL actually *does* to a model's output distribution. Many works[^qin2025][^arxiv-org-2507-14843] [^yue2025] claim that RL only sharpens the distribution without teaching any new reasoning behaviors. 
+## Result 2: RL outperforms SFT when demonstrations are scarce.
 
+![GSM8K results with SFT-Gold](/assets/figures/gsm_passatk_sftgold_comparison.png "Figure 3. GSM8K results with SFT-Gold (all ~23 solutions per problem). With abundant ground-truth solutions, SFT-Gold surpasses RL on pass@8 and pass@32. But this idealized setting is rarely practical.")
 
-We can think about RL's effect in two ways:
+In practice, getting even *one* high-quality solution trace per problem can be expensive. Getting 20+? That's usually only feasible with frontier model distillation—not exactly a scalable strategy.
 
-- **Sharpening:** pass@1 improves, but pass@k (for large k) doesn't improve and sometimes it can even decrease. In other words, the model concentrates probability mass on a smaller set of solutions. It's getting more confident about specific paths, but not discovering new ones.
+We compared RL against two SFT variants:
+- **SFT** (realistic): one randomly chosen solution per problem
+- **SFT-Gold** (idealized): all ~23 ground-truth solutions per problem
 
-- **Expansion:** Both pass@1 and pass@k improve together. This indicates that the model discovers more correct new successful reasoning paths it didn't have before.
+The results are clear: with only one solution per problem, **RL substantially outperforms SFT on pass@1** and is competitive on pass@8 and pass@32. RL bootstraps diverse reasoning strategies from its own generations, while SFT with a single demonstration is bottlenecked by the quality and diversity of that single trace.
 
-Recent work has claimed that RL mostly just *sharpens* the distribution without giving the model genuinely new reasoning capabilities. But we found that **whether RL has a sharpening or expansion effect depends on the training pipeline.**
+When SFT has access to many diverse solutions (SFT-Gold), the story changes—SFT-Gold surpasses RL on pass@8 and pass@32, and SFT-Gold→RL is the strongest recipe overall on pass@1. This makes sense: diverse ground-truth traces provide coverage benefits that on-policy exploration may not match.
 
-![Training dynamics: sharpening vs expansion](/assets/figures/gsm8k_rl_train_dynamics_comparison.png "Figure 4. Training dynamics. Left: SFT→RL shows sharpening (pass@1 up, pass@32 down during RL). Right: RL-only shows expansion (both pass@1 and pass@32 up).")
+But here's the thing: the SFT-Gold setting is *unrealistic* for most domains. In the real world where you typically have at most one demonstration per problem, RL is the stronger post-training objective.
 
-### Standard pipeline (SFT→RL) tends to sharpen
+**Takeaway:** Don't sleep on RL just because SFT seems simpler. When demonstrations are scarce (which is most of the time), RL is the more effective objective.
 
+---
 
-When RL comes *after* SFT, we reproduce the sharpening effect that others have observed that pass@1 continues to improve during RL while pass@32 actually decreases slightly during RL (after increasing during SFT).
-**We hypothesize that** during SFT, the model has already seen ground-truth solutions for these exact questions. So when RL kicks in, it's mostly refining and concentrating around the reasoning paths it learned during SFT, rather than discovering new ones.
+## Result 3: Sharpening or expansion? It depends on the pipeline.
 
-### RL-only tends to expand
+One of the heated debates in recent work is about what RL *actually does* to a model's output distribution.
 
-When we run RL directly on the base checkpoint (skipping SFT entirely), we instead observe the expansion effect where **both pass@1 and pass@32 improve**. Without prior exposure to ground-truth solutions, the model appears to explore and discover new reasoning paths through on-policy learning.
+- **Sharpening:** pass@1 improves but pass@k (for large k) stagnates or decreases. The model concentrates on known reasoning paths without discovering new ones.
+- **Expansion:** Both pass@1 and pass@k improve. The model discovers genuinely new correct reasoning paths.
 
+Many recent works have claimed that RL mostly just sharpens the distribution. But we found that **whether you see sharpening or expansion depends entirely on the training pipeline.**
 
-<details>
-<summary><strong>An important detour: brittleness on early checkpoints</strong></summary>
+![Training dynamics: sharpening vs expansion](/assets/figures/gsm8k_rl_train_dynamics_comparison.png "Figure 4. Training dynamics on the same pretraining checkpoint. Left: SFT→RL shows sharpening (pass@1 up, pass@32 down during RL). Right: Direct RL shows expansion (both pass@1 and pass@32 up).")
 
-![Seed brittleness at early checkpoints](/assets/figures/gsm8k_seed_rewards.png "Figure A1. Seed brittleness at early checkpoints: training reward can look similar while test performance diverges sharply.")
+### Standard pipeline (SFT→RL) → sharpening
 
+When RL comes after SFT, we reproduce the sharpening effect others have observed: pass@1 keeps improving during RL, but pass@32 slightly decreases. During SFT, the model already learned ground-truth solutions for these questions. So when RL kicks in, it mostly refines and concentrates around those paths rather than discovering new ones.
 
-Despite these promising results, we also noticed that directly running RL on early checkpoints is **unstable**. 
+### Direct RL → expansion
 
-Between 4B and 10B pretraining tokens, we found that RL performance is highly sensitive to random seed. Some seeds give us significant improvements on GSM8K; others barely improve over the base checkpoint at all. But interestingly, both the good and bad seeds achieve similar training rewards. It suggests that RL on early checkpoints can sometimes lead to superficial pattern learning or memorization during RL, rather than genuine reasoning development. The model might be "gaming" the reward signal in ways that don't transfer to actual problem-solving ability. This is a real limitation we're still trying to understand. 
-    
-For earlier checkpoints in our main results, we ran RL across 4 different seeds and reported the best-performing one. 
+When we skip SFT and run RL directly on the base checkpoint, both pass@1 and pass@32 improve. Without prior exposure to ground-truth solutions, the model actually *explores* and discovers new reasoning paths through on-policy learning.
 
-</details>
+This is an important nuance: **the sharpening effect commonly attributed to RL is actually an artifact of a preceding SFT stage, not of the RL objective itself.** SFT constrains exploration; RL doesn't.
 
-**Result 2 takeaway:** RL's effect isn't fixed. Whether you see sharpening or expansion depends on what the model has already learned and how much room it has to explore.
+**Takeaway:** RL's effect isn't fixed. Whether you see sharpening or expansion depends on what the model has already seen and how much room it has to explore.
 
-## Result 3: How Many Rollouts Do You Actually Need?
+---
 
-![Rollout scaling trade-offs](/assets/figures/gsm8k_rollouts_p1-2.png)
-![pass@1 and pass@8 for different rollout counts](/assets/figures/gsm8k_rollouts_p8-2.png "Figure 6. Rollout scaling trade-offs. pass@1 and pass@8 results for different rollout counts on GSM8K-Easy and GSM8K-Hard splits, shown as a function of both training examples and FLOPs. More rollouts improves sample efficiency, but fewer rollouts can be more FLOP-efficient—especially on the hard split.")
+## Result 4: RL preserves general capabilities; SFT doesn't.
 
-When we ran RL on early pretraining checkpoints, we ran into a pretty practical problem: the model is pretty bad at the training questions. So we had to deal with the **sparse rewards** problem: most of the model's attempts are wrong, so RL doesn't get much useful learning signal from its rollouts.
+![General capabilities](/assets/figures/general_capabilities_comparison.png "Figure 5. Performance on six general-purpose (non-math) benchmarks. SFT consistently degrades performance by 4–8 pp on average. RL leaves these capabilities essentially unchanged.")
 
-We had a very natural idea: what if we just sample *more* rollouts per question? If the model only gets 1 out of 10 attempts right, maybe sampling 64 attempts instead of 5 will give us enough correct solutions to learn from.
+A natural concern with applying RL to intermediate pretraining checkpoints: does it wreck everything else the model learned?
 
-However, more rollouts also means more compute per training step. So we wanted to understand **when taking compute into consideration, whether increasing rollouts improve RL training.** 
+We evaluated on six general-purpose benchmarks (LAMBADA, HellaSwag, ARC-Easy, ARC-Challenge, PIQA, OpenBookQA) and found a striking asymmetry:
 
-### Experimental setup
+- **SFT** (both regular and SFT-Gold) consistently degrades general capabilities by 4–8 percentage points on average across benchmarks.
+- **RL** leaves these capabilities essentially **unchanged**.
 
-To study this properly, we simulated "easy" and "hard" training scenarios by splitting our *training* dataset based on how well the base model does on each question. Concurrent work[^cheng2026isocompute] performed analysis for number of rollouts using a similar setup. We design two subsets from OpenMathInstruct based on problem difficulty:
+This is a meaningful practical advantage. If you're doing post-training with RL directly on a base checkpoint, you get the reasoning improvements without paying a tax on everything else. SFT, on the other hand, appears to overwrite some of the model's general knowledge while teaching it to reason about math.
 
-<details>
-<summary>About OpenMathInstruct structure</summary>
+**Takeaway:** RL is a more surgical intervention—it improves what you want without degrading what you don't.
 
-OpenMathInstruct contains two main categories of questions: the majority are inspired by the MATH dataset, which consists of challenging competition-level math problems, while a minority are inspired by the GSM8K dataset, which consists of grade-school level math problems.
+---
 
-</details>
+## Result 5: Parallel averaging of RL and SFT.
 
-From the training set, we only consider GSM8k-like questions and partition them into two sets:
+The previous results expose a clear complementarity between RL and SFT:
+- **RL** expands the distribution, discovers new reasoning paths, and preserves general capabilities. But it needs the base model to have enough latent capability to bootstrap from.
+- **SFT** provides reliable supervision from ground-truth traces and works even when the model is weak. But it can sharpen the distribution and degrade general capabilities.
 
-- **GSM8K-Easy:** Questions where the base model gets 16-64 correct solutions out of 64 attempts (it's doing okay)
-- **GSM8K-Hard:** Questions where the base model gets ≤8 correct solutions out of 64 attempts (it's struggling)
+What if we could have both? We propose a simple algorithm: **parallel averaging**.
 
-We then trained with GRPO using either **n=5 rollouts** or **n=64 rollouts** per question, and tracked performance as a function of both:
-1. **Training examples seen** (sample efficiency)
-2. **FLOPs consumed** (compute efficiency)
+![Parallel averaging results](/assets/figures/parallel_averaging_comparison.png "Figure 6. Parallel averaging achieves the strongest pass@32 across all checkpoints, surpassing the standard SFT→RL pipeline, while preserving general capabilities.")
+
+At each training step, starting from the same parameter snapshot, we:
+1. Run one batch through the RL optimizer → get RL gradient update
+2. Run one batch through the SFT optimizer → get SFT gradient update
+3. Average the two updates and apply to the model
+
+Critically, the two optimizers maintain independent Adam states (first- and second-moment estimates), so they don't interfere with each other's adaptive step sizes.
 
 ### What we found
 
-The results reveal a clear **sample efficiency vs. compute efficiency trade-off**:
+Across every pretraining checkpoint, **parallel averaging achieves the strongest pass@32** among all recipes that use a single demonstration per problem—surpassing direct RL, SFT, and the standard SFT→RL pipeline. It also preserves general capabilities on par with direct RL, whereas every SFT-based recipe regresses by 5–8 percentage points.
 
-**Sample efficiency (examples seen):**  
-With n=64 rollouts, models converge faster in terms of training steps. You're squeezing more learning signal out of each question, so you need fewer examples to reach good performance.
+The trade-off: pass@1 is somewhat lower compared to direct RL or SFT alone. But the fact that a simple equal-weight average already outperforms on pass@32 suggests there's a lot of room for more sophisticated combinations—adaptive weighting, scheduling, or importance sampling on top of independent optimizer states.
 
-**Compute efficiency (FLOPs):**  
-With n=5 rollouts, training is way more FLOP-efficient, especially early in training. You reach similar performance levels with a fraction of the compute budget.
-As training continues (toward 10⁶ FLOPs), the gap narrows. Eventually n=64 catches up or even slightly surpasses n=5. But in the early stages, *fewer rollouts win on compute*.
+**Takeaway:** RL and SFT signals are complementary. Combining them simultaneously (rather than sequentially) can get you the best of both worlds.
 
-### Three key takeaways on rollouts
-
-**1. Final performance doesn't depend much on rollout count.** 
-Both n=5 and n=64 converge to similar pass@k peaks. You're not missing out on capability by using fewer rollouts.
-
-**2. Clear trade-off between sample and compute efficiency.**
-- More rollouts (n=64) gives better sample efficiency, meaning faster convergence per training step.
-- Fewer rollouts (n=5) gives better compute efficiency, meaning similar performance with less compute.
-
-**3. The compute advantage is especially pronounced on hard problems.**
-On GSM8K-Hard (where rewards are sparse), using n=5 rollouts significantly outperforms n=64 in terms of FLOP efficiency.
-
-**Result 3 takeaway:** If you're training RL with sparse rewards, **fewer rollouts can actually be more efficient**[^compute-optimal-rl-llm-scaling-github-io]. You don't need massive rollout scaling to get good performance.
-
+---
 
 ## What's Next?
 
-This study is very much ongoing—we see it as a controlled probe into *when* RL can help, not a complete recipe for replacing the standard pipeline.
+Our results paint a nuanced picture: many assumptions about RL in LLM training are actually artifacts of the current pipeline, not fundamental properties of the objective.
 
-### Some important caveats
+### The big picture
 
-**Task and algorithm scope:**  
-We intentionally chose RLVR with GRPO[^arxiv-org-2307-04964] and focused on math reasoning. It's a clean setup to study the problem, but by no means comprehensive. Different RL algorithms or tasks (e.g., coding, general reasoning, instruction following) might behave quite differently.
+If RL is effective well inside pretraining, and the pretraining data mix controls its ceiling, the natural question is: **what should pretraining look like when RL is treated as a first-class objective rather than a final post-training step?** Our parallel-averaging experiment is an early data point, but there's a lot to explore—adaptive scheduling, different weighting schemes, smarter rollout strategies.
 
-**Data mixture matters:**  
-Our base model was pretrained on a corpus with substantial math (20%) and reasoning-related content (30%). "RL readiness" likely depends heavily on what's in the pretraining mix—a model trained mostly on web text might show different dynamics.
+### Important caveats
 
-**Model scale:**  
-All our results are from a 1B model. Larger models may show different transitions—maybe they become "RL-ready" earlier, or maybe the brittleness we observed goes away. We don't know yet.
+- **Task scope:** We focused on math reasoning with GRPO. Different RL algorithms or tasks (coding, general reasoning, instruction following) might behave differently.
+- **Data mixture matters:** Our pretraining corpus had ~20% math and ~30% reasoning content. "RL readiness" likely depends heavily on what's in the pretraining mix.
+- **Model scale:** All results are at 1B and 4B parameters. Whether these findings hold at frontier scale is essential future work.
 
-### Open directions we're excited about
-
-**Mixing RL into pretraining:**  
-Our analysis suggests RL can be effective surprisingly early in training. This raises a natural question: what if we don't wait for pretraining to finish, but instead *interleave* RL with the standard next-token prediction objective during pretraining itself?
-
-Recent work has started exploring "RL pretraining"[^arxiv-org-2506-08007] [^arxiv-org-2510-01265] [^arxiv-org-2509-19249], but there are tons of open questions: How should you schedule the two objectives? What fraction of compute should go to each? Does the optimal data mixture change if you're doing both objectives at once?
-
-**Data mixtures and the expansion vs. sharpening effect:**  
-We found that pretraining on lots of math makes RL effective quickly. But we also found that RL after SFT tends to sharpen rather than expand. This suggests an interesting hypothesis: **the effect of RL depends heavily on what the model has already seen.**
-
-If we combine NTP and RL objectives during pretraining, maybe the optimal data mixture is different from what's currently standard. The common paradigm is to pretrain on general web data and save task-specific data for later. But if we're doing RL from the start, maybe we want more structured reasoning content earlier? Or maybe we want to ensure diversity in problem types to encourage expansion?
-
-
-## Appendix
-
-We include some additional plots and ablations here. 
-<!-- These are useful sanity-check training dynamics and evaluation choices. -->
-
-<details>
-<summary><strong>Training convergence across checkpoints </strong></summary>
-    
-In this work, we are interested in understanding, given sufficient compute, how well each method performs. Therefore, we train all our RL and SFT runs until convergence. In the two plots below, we confirm that both our SFT and RL runs have been trained until convergence. 
-
-<figure>
-  <img src="/assets/figures/gsm8k_rl_train_dynamics.png" alt="RL train/val reward and GSM8K pass@1 over RL steps for multiple pretraining checkpoints." width="100%"/>
-  <figcaption><strong>Figure A2.</strong> RL reward curves (train/val) and GSM8K pass@1 over RL steps show convergence across checkpoints.</figcaption>
-</figure>
-
-    
-<figure>
-  <img src="/assets/figures/gsm8k_sft_epoch_comparison.png" alt="SFT epoch comparison (5 vs 10 epochs) showing convergence across checkpoints on GSM8K pass@k." width="100%"/>
-  <figcaption><strong>Figure A3.</strong> SFT epoch ablation indicates performance converges by ~5 epochs.</figcaption>
-</figure>
-</details>
-
-
-<details>
-<summary><strong>How we evaluate base checkpoints </strong></summary>
-The pretraining checkpoints do not have instruct following capabilities. Our goal is to evaluate their math capabilities, so we use 8-shot in-context examples to prompt the model to answer questions in the correct format. 
-<figure>
-  <img src="/assets/figures/gsm8k_base_eval_shots.png" alt="n-shot prompting ablation (0/1/8-shot) for evaluating base checkpoints on GSM8K and MATH pass@k." width="100%"/>
-  <figcaption><strong>Figure A4.</strong> Few-shot prompting ablation for base checkpoints: 8-shot yields the strongest evaluation performance.</figcaption>
-</figure>
-
-</details>
+**This is a living document and we're actively working on this project. If you have questions, ideas, or want to discuss any of these findings, feel free to reach out!**
 
 ## Citation
 
@@ -299,72 +216,10 @@ Please cite this work as:
 ```bibtex
 @misc{rbcmsq2026rlexcursions,
   author={Rachit Bansal* and Clara Mohri* and Tian (Sunny) Qin* and David Alvarez-Melis and Sham Kakade},
-  title={RL Excursions During Pretraining: How Early Is Too Early for On-Policy Learning?},
+  title={RL Excursions during Pre-training: Re-examining Policy Optimization for LLM Training},
   howpublished={url{https://rachitbansal.github.io/rl-excursions/}},
   year={2026}
 }
 ```
-[^biderman2023]: Biderman et al. (2023). [Pythia: A Suite for Analyzing Large Language Models Across Training and Scaling](https://proceedings.mlr.press/v202/biderman23a.html). ICML 2023.
-
-[^arxiv-org-2510-15020]: Chen et al. (2025). [The Coverage Principle: How Pre-Training Enables Post-Training](https://arxiv.org/abs/2510.15020).
-
-[^arxiv-org-2107-03374]: Chen et al. (2021). [Evaluating Large Language Models Trained on Code](https://arxiv.org/abs/2107.03374).
-
-[^compute-optimal-rl-llm-scaling-github-io]: Cheng et al. (2026). [Isocompute Playbook: Optimally Scaling Sampling Compute for RL Training of LLMs](https://compute-optimal-rl-llm-scaling.github.io/).
-
-[^arxiv-org-2110-14168]: Cobbe et al. (2021). [Training Verifiers to Solve Math Word Problems](https://arxiv.org/abs/2110.14168).
-
-[^arxiv-org-2310-12773]: Dai et al. (2023). [Safe RLHF: Safe Reinforcement Learning from Human Feedback](https://arxiv.org/abs/2310.12773).
-
-[^arxiv-org-2506-08007]: Dong et al. (2025). [Reinforcement Pre-Training](https://arxiv.org/abs/2506.08007).
-
-[^arxiv-org-2503-07453]: Foster et al. (2025). [Is a Good Foundation Necessary for Efficient Reinforcement Learning?](https://arxiv.org/abs/2503.07453).
-
-[^arxiv-org-2501-12948]: Guo et al. (2025). [DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning](https://arxiv.org/abs/2501.12948).
-
-[^arxiv-org-2510-01265]: Hatamizadeh et al. (2025). [RLP: Reinforcement as a Pretraining Objective](https://arxiv.org/abs/2510.01265).
-
-[^hendrycks2021]: Hendrycks et al. (2021). [Measuring Mathematical Problem Solving with the MATH Dataset](https://arxiv.org/abs/2103.03874). NeurIPS 2021.
-
-[^arxiv-org-2203-15556]: Hoffmann et al. (2022). [Training Compute-Optimal Large Language Models](https://arxiv.org/abs/2203.15556).
-
-[^li2024]: Li et al. (2024). [Datacomp-LM: In Search of the Next Generation of Training Sets for Language Models](https://arxiv.org/abs/2406.11794). NeurIPS 2024.
-
-[^arxiv-org-2509-19249]: Li et al. (2025). [Reinforcement Learning on Pre-Training Data](https://arxiv.org/abs/2509.19249).
-
-[^arxiv-org-1711-05101]: Loshchilov & Hutter (2019). [Decoupled Weight Decay Regularization](https://arxiv.org/abs/1711.05101).
 
 [^arxiv-org-2501-00656]: Team OLMo (2024). [2 OLMo 2 Furious](https://arxiv.org/abs/2501.00656).
-
-[^ouyang2022]: Ouyang et al. (2022). [Training Language Models to Follow Instructions with Human Feedback](https://arxiv.org/abs/2203.02155). NeurIPS 2022.
-
-[^arxiv-org-2305-18290]: Rafailov et al. (2023). [Direct Preference Optimization: Your Language Model is Secretly a Reward Model](https://arxiv.org/abs/2305.18290). NeurIPS 2023.
-
-[^arxiv-org-2402-03300]: Shao et al. (2024). [DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models](https://arxiv.org/abs/2402.03300).
-
-[^arxiv-org-2409-19256]: Sheng et al. (2024). [HybridFlow: A Flexible and Efficient RLHF Framework](https://arxiv.org/abs/2409.19256).
-
-[^toshniwal2024]: Toshniwal et al. (2024). [OpenMathInstruct-1: A 1.8 Million Math Instruction Tuning Dataset](https://arxiv.org/abs/2402.10176). NeurIPS 2024.
-
-[^wei2022]: Wei et al. (2022). [Finetuned Language Models Are Zero-Shot Learners](https://arxiv.org/abs/2109.01652). ICLR 2022.
-
-[^arxiv-org-2507-14843]: Wu et al. (2025). [The Invisible Leash: Why RLVR May or May Not Escape Its Origin](https://arxiv.org/abs/2507.14843).
-
-[^arxiv-org-2512-03442]: Xing et al. (2025). [PretrainZero: Reinforcement Active Pretraining](https://arxiv.org/abs/2512.03442).
-
-[^yue2025]: Yue et al. (2025). [Does Reinforcement Learning Really Incentivize Reasoning Capacity in LLMs Beyond the Base Model?](https://arxiv.org/abs/2504.13837).
-
-[^arxiv-org-2512-07783]: Zhang et al. (2025). [On the Interplay of Pre-Training, Mid-Training, and RL on Reasoning Language Models](https://arxiv.org/abs/2512.07783).
-
-[^arxiv-org-2307-04964]: Zheng et al. (2023). [Secrets of RLHF in Large Language Models Part I: PPO](https://arxiv.org/abs/2307.04964).
-
-[^zhou2023]: Zhou et al. (2023). [Lima: Less Is More for Alignment](https://arxiv.org/abs/2305.11206). NeurIPS 2023.
-
-[^qin2025]: Qin et al. (2025). [Decomposing Elements of Problem Solving: What "Math" Does RL Teach?](https://arxiv.org/abs/2505.22756). 
-
-[^cheng2026isocompute]: Cheng et al. (2026). [IsoCompute Playbook: Optimally Scaling Sampling Compute for RL Training of LLMs](https://compute-optimal-rl-llm-scaling.github.io/). 
-
-
-
-**Feedback?**  
-These are open questions we're still thinking about; we'd love to hear your thoughts! If you have questions, ideas, or want to discuss any of these findings, feel free to reach out!

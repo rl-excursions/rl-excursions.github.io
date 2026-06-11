@@ -6,8 +6,8 @@
 </script>
 
 <Seo
-  title="RL Excursions during Pretraining: How early is too early for On-policy Learning?"
-  description="We study when and how to introduce RL objectives during LLM training: RL on intermediate pretraining checkpoints, sharpening vs expansion, and rollout budgets."
+  title="RL Excursions during Pre-training: Re-examining Policy Optimization for LLM Training"
+  description="We study when and how RL should be used in LLM training: direct RL vs SFT, sharpening vs expansion, general capability preservation, and parallel averaging."
 />
 
 <div>
