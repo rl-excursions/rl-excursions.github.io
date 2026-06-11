@@ -13,15 +13,15 @@ Under this standard regime, RL only ever appears after a substantial amount of N
 To answer these questions, we pretrain an LLM from scratch on a high-quality, reasoning-heavy corpus, save intermediate checkpoints, and apply RL, SFT, and SFT→RL to each checkpoint head-to-head. We use math reasoning as our testbed since it provides a clean setting with unambiguous and verifiable rewards. Here's what we found:
 
 **When does RL work?** (Results 1 & 2)
-- **RL is effective surprisingly early in pretraining.** Models start learning from their own generations well before Chinchilla-optimal token counts. On GSM8K, direct RL matches or outperforms the full SFT→RL pipeline.
-- **RL outperforms SFT when ground-truth demonstrations are scarce.** With only one solution per problem (a realistic setting), RL substantially outperforms SFT on pass@1. SFT only regains the edge when it has access to many high-quality solutions per problem, which is rarely practical.
+- **[RL is effective surprisingly early in pretraining.](#result-1-rl-works-surprisingly-early)** Models start learning from their own generations well before Chinchilla-optimal token counts. On GSM8K, direct RL matches or outperforms the full SFT→RL pipeline.
+- **[RL outperforms SFT when ground-truth demonstrations are scarce.](#result-2-rl-outperforms-sft-when-demonstrations-are-scarce)** With only one solution per problem (a realistic setting), RL substantially outperforms SFT on pass@1. SFT only regains the edge when it has access to many high-quality solutions per problem, which is rarely practical.
 
 **What does RL do?** (Results 3 & 4)
-- **RL can expand the output distribution.** Contrary to recent claims that RL only sharpens, we find that direct RL improves both pass@1 and pass@k. The sharpening effect only arises when RL follows SFT—it's an artifact of the pipeline, not the objective.
-- **RL preserves general capabilities; SFT doesn't.** SFT consistently degrades non-math benchmarks by 4–8 percentage points, while RL leaves them essentially unchanged.
+- **[RL can expand the output distribution.](#result-3-sharpening-or-expansion-it-depends-on-the-pipeline)** Contrary to recent claims that RL only sharpens, we find that direct RL improves both pass@1 and pass@k. The sharpening effect only arises when RL follows SFT—it's an artifact of the pipeline, not the objective.
+- **[RL preserves general capabilities; SFT doesn't.](#result-4-rl-preserves-general-capabilities-sft-doesn-t)** SFT consistently degrades non-math benchmarks by 4–8 percentage points, while RL leaves them essentially unchanged.
 
 **How should RL be used?** (Result 5)
-- **Parallel averaging of RL and SFT gradients combines their strengths.** A simple algorithm that averages RL and SFT updates at each step achieves the best pass@32 across all checkpoints while preserving general capabilities.
+- **[Parallel averaging of RL and SFT gradients combines their strengths.](#result-5-parallel-averaging-of-rl-and-sft)** A simple algorithm that averages RL and SFT updates at each step achieves the best pass@32 across all checkpoints while preserving general capabilities.
 
 Together, these findings suggest that many assumptions about RL in LLM training are artifacts of the current pipeline, not fundamental properties of the objective—and that LLM training might benefit from an expanded use of RL.
 
@@ -182,6 +182,21 @@ At each training step, starting from the same parameter snapshot, we:
 3. Average the two updates and apply to the model
 
 Critically, the two optimizers maintain independent Adam states (first- and second-moment estimates), so they don't interfere with each other's adaptive step sizes.
+
+:::fold_begin title="Algorithm: Parallel Averaging":::
+
+**Input:** parameters $\theta$; optimizer states $s_{\text{RL}}, s_{\text{SFT}}$; batches $\mathcal{B}_{\text{RL}}, \mathcal{B}_{\text{SFT}}$; learning rates $\eta_{\text{RL}}, \eta_{\text{SFT}}$
+
+1. $\bar{\theta} \leftarrow \theta$ — *snapshot current parameters*
+2. $g_{\text{RL}} \leftarrow \nabla_{\theta}\mathcal{L}_{\text{RL}}(\theta;\mathcal{B}_{\text{RL}})\big|_{\theta=\bar{\theta}}$ — *RL gradient at snapshot*
+3. $g_{\text{SFT}} \leftarrow \nabla_{\theta}\mathcal{L}_{\text{SFT}}(\theta;\mathcal{B}_{\text{SFT}})\big|_{\theta=\bar{\theta}}$ — *SFT gradient at snapshot*
+4. $(\Delta_{\text{RL}},\, s_{\text{RL}}) \leftarrow \mathrm{OptUpdate}(g_{\text{RL}}, s_{\text{RL}}, \eta_{\text{RL}})$ — *RL optimizer update*
+5. $(\Delta_{\text{SFT}},\, s_{\text{SFT}}) \leftarrow \mathrm{OptUpdate}(g_{\text{SFT}}, s_{\text{SFT}}, \eta_{\text{SFT}})$ — *SFT optimizer update*
+6. $\theta \leftarrow \bar{\theta} + \tfrac{1}{2}\!\left(\Delta_{\text{RL}}+\Delta_{\text{SFT}}\right)$ — *average and apply*
+
+**return** $\theta$
+
+:::fold_end:::
 
 ### What we found
 
