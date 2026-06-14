@@ -44,7 +44,7 @@
   <div class="header-inner mb-8">
     <h1 class="title-font font-bold text-black text-3xl mb-4 leading-tight">
       {$page.data.header?.title ??
-        "RL Excursions during Pretraining: How early is too early for On-policy Learning?"}
+        "RL Excursions during Pre-training: Re-examining Policy Optimization for LLM Training"}
     </h1>
 
     <div class="meta text-black">

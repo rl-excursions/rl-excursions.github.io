@@ -9,8 +9,8 @@
 </script>
 
 <Seo
-  title="RL Excursions during Pretraining"
-  description="RL Excursions during Pretraining: How early is too early for On-policy Learning?"
+  title="RL Excursions during Pre-training"
+  description="RL Excursions during Pre-training: Re-examining Policy Optimization for LLM Training"
 />
 
 <div>

@@ -8,7 +8,7 @@ export const load: LayoutLoad = async ({ url }) => {
     pathname: url.pathname,
     header: {
       title:
-        "RL Excursions during Pretraining: How early is too early for On-policy Learning?",
+        "RL Excursions during Pre-training: Re-examining Policy Optimization for LLM Training",
       // Edit authors and affiliations for your paper.
       authors: [
         { name: "Rachit Bansal*", url: "https://rachitbansal.github.io/", affils: ["harvard"], line: 1 },
