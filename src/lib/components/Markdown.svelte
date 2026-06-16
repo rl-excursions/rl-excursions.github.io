@@ -245,9 +245,10 @@
         out += `><source src="${token.src}#t=0.1" type="${sourceType}" /></video>`;
       } else {
         const figId = token.attrs["id"] || `fig-${slugify(token.alt)}`;
-        out += `<img src="${token.src}" alt="${token.alt}" id="${figId}" class="block mx-auto unselectable"`;
+        const extraClass = token.attrs["class"] ? ` ${token.attrs["class"]}` : "";
+        out += `<img src="${token.src}" alt="${token.alt}" id="${figId}" class="block mx-auto unselectable${extraClass}"`;
         for (const k in token.attrs) {
-          if (k === "id") continue;
+          if (k === "id" || k === "class") continue;
           out += ` ${k}="${token.attrs[k]}"`;
         }
         out += " />";
@@ -1377,6 +1378,16 @@
     /* Override legacy padding classes in the generated HTML. */
     padding-left: 0 !important;
     padding-right: 0 !important;
+  }
+
+  /* Wide figures: break out symmetrically beyond the text column for
+     large/banner figures that are hard to read at column width. */
+  :global(.md-output img.md-fig-wide) {
+    width: min(96vw, 1080px);
+    max-width: none;
+    height: auto;
+    margin-left: 50%;
+    transform: translateX(-50%);
   }
 
   /* 2x2 figure grid (used in some markdown sections) */
