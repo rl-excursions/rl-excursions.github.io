@@ -1381,13 +1381,25 @@
   }
 
   /* Wide figures: break out symmetrically beyond the text column for
-     large/banner figures that are hard to read at column width. */
+     large/banner figures that are hard to read at column width.
+     The width is capped to the space actually available in the side
+     margins (reserving ~350px each side for the fixed TOC / footnotes)
+     so the figure never overlaps them, and is bounded below by the text
+     column width. Capped at 980px so the 1080px-native art is never
+     upscaled (keeps it sharp). */
   :global(.md-output img.md-fig-wide) {
-    width: min(96vw, 1080px);
+    width: max(100%, min(980px, calc(100vw - 700px)));
     max-width: none;
     height: auto;
     margin-left: 50%;
     transform: translateX(-50%);
+  }
+  @media (max-width: 1024px) {
+    :global(.md-output img.md-fig-wide) {
+      width: 100%;
+      margin-left: 0;
+      transform: none;
+    }
   }
 
   /* 2x2 figure grid (used in some markdown sections) */
