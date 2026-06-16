@@ -2,7 +2,7 @@
 
 As of 2026, Large Language Model (LLM) training follows a standard pipeline: **pretraining** → **supervised fine-tuning** (**SFT**) → **reinforcement learning** (**RL**) via verifiable rewards. These stages use fundamentally different objectives: pretraining and SFT employ a Next-Token Prediction (NTP) objective on a static external dataset ("off-policy"), whereas RL employs a policy optimization objective on the model's own generations ("on-policy").
 
-Under this standard regime, RL only ever appears after a substantial amount of NTP training. Is that fundamentally necessary, or just a design choice? And while it's widely observed that post-training dramatically improves reasoning, RL's actual influence on model capabilities has been the subject of heated recent debate. In this work, we attempt to answer three fundamental questions:
+Under this standard regime, RL is only used after a substantial amount of NTP training. Is that fundamentally necessary, or just a design choice? And while it's widely observed that post-training dramatically improves reasoning, the actual influence of RL on model capabilities has been the subject of recent debate. In this work, we attempt to answer three fundamental questions:
 
 > **1. When does RL work?** At what point during training does the model's self-generated data become good enough for on-policy learning to yield meaningful signal?
 
@@ -49,19 +49,19 @@ We pretrain a **1B-parameter** decoder-only model (OLMo2 architecture[^arxiv-org
 
 Let **M<sub>t</sub>** be the base checkpoint after *t* pretraining tokens. We compare:
 
-1. **Direct RL:** M<sub>t</sub> → M<sub>t</sub><sup>RL</sup>
+1. **Direct RL:** (M<sub>t</sub> → M<sub>t</sub><sup>RL</sup>)
    Run RL (GRPO) directly on the base checkpoint. No ground-truth reasoning traces—just the model's own generations and a binary reward.
 
-2. **SFT:** M<sub>t</sub> → M<sub>t</sub><sup>SFT</sup>
+2. **SFT:** (M<sub>t</sub> → M<sub>t</sub><sup>SFT</sup>)
    Train on **one** randomly chosen ground-truth solution per question using the NTP objective. This is the realistic SFT setting.
 
-3. **SFT-Gold:** M<sub>t</sub> → M<sub>t</sub><sup>SFT-Gold</sup>
-   Train on **all** ground-truth solutions per question (~23 per problem on average). An idealized setting that's impractical in most domains.
+3. **SFT-Gold:** (M<sub>t</sub> → M<sub>t</sub><sup>SFT-Gold</sup>)
+   Train on **all** ground-truth solutions per question (~23 per problem on average). An idealized setting that's impractical in many domains.
 
-4. **Standard pipeline:** M<sub>t</sub> → M<sub>t</sub><sup>SFT</sup> → M<sub>t</sub><sup>SFT→RL</sup>
+4. **Standard pipeline:** (M<sub>t</sub> → M<sub>t</sub><sup>SFT</sup> → M<sub>t</sub><sup>SFT→RL</sup>)
    SFT followed by RL. This is the typical modern recipe and our gold-standard baseline.
 
-5. **Parallel averaging:** M<sub>t</sub> → M<sub>t</sub><sup>Parallel</sup>
+5. **Parallel averaging:** (M<sub>t</sub> → M<sub>t</sub><sup>Parallel</sup>)
    Average RL and SFT gradient updates at each training step (more on this in Result 5).
 
 ### Data and evaluation
@@ -100,7 +100,7 @@ Between 4B and 10B pretraining tokens, RL performance can be sensitive to random
 
 </details>
 
-**Takeaway:** RL from early checkpoints is effective, but task difficulty matters. For easier problems, it can match the standard pipeline. For harder problems, pretraining data composition is the key lever.
+**Takeaway:** RL from early checkpoints is effective, but task difficulty matters. For easier problems, it can match the standard pipeline. For harder problems, pretraining data composition is a key lever.
 
 ---
 
@@ -108,7 +108,7 @@ Between 4B and 10B pretraining tokens, RL performance can be sensitive to random
 
 ![GSM8K results with SFT-Gold](/assets/figures/gsm_passatk_sftgold_comparison.png "Figure 3. GSM8K results with SFT-Gold (all ~23 solutions per problem). With abundant ground-truth solutions, SFT-Gold surpasses RL on pass@8 and pass@32. But this idealized setting is rarely practical.")
 
-In practice, getting even *one* high-quality solution trace per problem can be expensive. Getting 20+? That's usually only feasible with frontier model distillation—not exactly a scalable strategy.
+In practice, getting just one high-quality solution trace per problem can be expensive. Getting 20+ unique solution traces is an unscalable and infeasible strategy in most settings.
 
 We compared RL against two SFT variants:
 - **SFT** (realistic): one randomly chosen solution per problem
@@ -120,18 +120,18 @@ When SFT has access to many diverse solutions (SFT-Gold), the story changes—SF
 
 But here's the thing: the SFT-Gold setting is *unrealistic* for most domains. In the real world where you typically have at most one demonstration per problem, RL is the stronger post-training objective.
 
-**Takeaway:** Don't sleep on RL just because SFT seems simpler. When demonstrations are scarce (which is most of the time), RL is the more effective objective.
+**Takeaway:** In the realistic setting in which ground truth demonstrations are scarce, the RL objective is more effective.
 
 ---
 
 ## Result 3: Sharpening or expansion? It depends on the pipeline.
 
-One of the heated debates in recent work is about what RL *actually does* to a model's output distribution.
+One of the debates in recent work is about what RL *actually does* to a model's output distribution.
 
 - **Sharpening:** pass@1 improves but pass@k (for large k) stagnates or decreases. The model concentrates on known reasoning paths without discovering new ones.
 - **Expansion:** Both pass@1 and pass@k improve. The model discovers genuinely new correct reasoning paths.
 
-Many recent works have claimed that RL mostly just sharpens the distribution. But we found that **whether you see sharpening or expansion depends entirely on the training pipeline.**
+Many recent works have claimed that RL mostly sharpens the distribution. But we found that **whether you see sharpening or expansion depends entirely on the training pipeline.**
 
 ![Training dynamics: sharpening vs expansion](/assets/figures/gsm8k_rl_train_dynamics_comparison.png "Figure 4. Training dynamics on the same pretraining checkpoint. Left: SFT→RL shows sharpening (pass@1 up, pass@32 down during RL). Right: Direct RL shows expansion (both pass@1 and pass@32 up).")
 
@@ -145,7 +145,7 @@ When we skip SFT and run RL directly on the base checkpoint, both pass@1 and pas
 
 This is an important nuance: **the sharpening effect commonly attributed to RL is actually an artifact of a preceding SFT stage, not of the RL objective itself.** SFT constrains exploration; RL doesn't.
 
-**Takeaway:** RL's effect isn't fixed. Whether you see sharpening or expansion depends on what the model has already seen and how much room it has to explore.
+**Takeaway:** Whether the use of RL sharpens or expands the distribution depends on the training pipeline.
 
 ---
 
@@ -162,7 +162,7 @@ We evaluated on six general-purpose benchmarks (LAMBADA, HellaSwag, ARC-Easy, AR
 
 This is a meaningful practical advantage. If you're doing post-training with RL directly on a base checkpoint, you get the reasoning improvements without paying a tax on everything else. SFT, on the other hand, appears to overwrite some of the model's general knowledge while teaching it to reason about math.
 
-**Takeaway:** RL is a more surgical intervention—it improves what you want without degrading what you don't.
+**Takeaway:** RL is a more surgical intervention it improves what you want without degrading what you don't want.
 
 ---
 
@@ -177,9 +177,9 @@ What if we could have both? We propose a simple algorithm: **parallel averaging*
 ![Parallel averaging results](/assets/figures/parallel_averaging_comparison.png "Figure 6. Parallel averaging achieves the strongest pass@32 across all checkpoints, surpassing the standard SFT→RL pipeline, while preserving general capabilities.")
 
 At each training step, starting from the same parameter snapshot, we:
-1. Run one batch through the RL optimizer → get RL gradient update
-2. Run one batch through the SFT optimizer → get SFT gradient update
-3. Average the two updates and apply to the model
+1. Run one batch through the RL optimizer → get RL gradient update.
+2. Run one batch through the SFT optimizer → get SFT gradient update.
+3. Average the two updates and apply to the model.
 
 Critically, the two optimizers maintain independent Adam states (first- and second-moment estimates), so they don't interfere with each other's adaptive step sizes.
 
